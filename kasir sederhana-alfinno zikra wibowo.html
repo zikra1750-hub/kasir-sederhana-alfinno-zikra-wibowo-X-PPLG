@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kasir Sederhana</title>
+  <style>
+    :root {
+      --bg:#f7f7f9;--card:#fff;--text:#1f2937;
+      --muted:#6b7280;--border:#e5e7eb;
+      --primary:#2563eb;--danger:#dc2626;--outline:#6b7280;
+    }
+    [data-theme="dark"] {
+      --bg:#0b1220;--card:#111827;--text:#e5e7eb;
+      --muted:#9ca3af;--border:#1f2937;
+      --primary:#60a5fa;--danger:#f87171;--outline:#9ca3af;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .app-header,.app-footer{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--card);border-bottom:1px solid var(--border)}
+    .app-footer{border-top:1px solid var(--border);border-bottom:none}
+    .container{max-width:960px;margin:20px auto;padding:0 16px}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+    h1,h2{margin:0 0 12px}
+    .header-actions,.summary-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:10px 12px;cursor:pointer;font-weight:600}
+    .btn:hover{opacity:.92}
+    .btn-outline{background:transparent;color:var(--outline);border:1px solid var(--outline)}
+    .btn-danger{background:var(--danger)}
+    .btn-primary{background:var(--primary)}
+    .btn-sm{padding:6px 8px;font-size:.85rem;border-radius:6px}
+    .form-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+    .form-row{display:flex;flex-direction:column;gap:6px}
+    .form-row input{border:1px solid var(--border);border-radius:8px;padding:10px;background:transparent;color:var(--text)}
+    .form-row.actions{grid-column:span 12;display:flex;gap:8px;align-items:center}
+    #itemName{grid-column:span 6}
+    #itemPrice{grid-column:span 3}
+    #itemQty{grid-column:span 3}
+    .table-wrapper{overflow:auto;border:1px solid var(--border);border-radius:8px}
+    table{width:100%;border-collapse:collapse}
+    thead th{text-align:left;padding:10px;background:var(--bg);border-bottom:1px solid var(--border)}
+    tbody td{padding:10px;border-bottom:1px solid var(--border)}
+    tbody tr:hover{background:rgba(0,0,0,.03)}
+    .summary-grid{display:grid;gap:10px;grid-template-columns:repeat(12,1fr)}
+    .summary-row{grid-column:span 6;display:flex;align-items:center;justify-content:space-between;border:1px dashed var(--border);border-radius:8px;padding:10px}
+    .summary-row.total{grid-column:span 12;font-size:1.2rem;font-weight:700;border-style:solid}
+    .summary-row input[type="number"]{width:140px;border:1px solid var(--border);border-radius:8px;padding:8px;background:transparent;color:var(--text)}
+    .summary-actions{grid-column:span 12}
+    .print-area .receipt{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--card)}
+    .receipt-header,.receipt-footer{text-align:center}
+    .receipt-table{width:100%;border-collapse:collapse;margin-top:8px}
+    .receipt-table th,.receipt-table td{text-align:left;padding:8px;border-bottom:1px solid var(--border)}
+    .receipt-summary{margin-top:10px}
+    .receipt-summary .line{display:flex;justify-content:space-between;padding:6px 0}
+    .receipt-summary .line.total{font-weight:700}
+    @media print{
+      body{background:#fff}
+      .app-header,.container>.panel:not(.print-area),.app-footer{display:none!important}
+      .print-area{display:block;margin:0;padding:0;border:none;box-shadow:none}
+      .print-area .receipt{border:none;padding:0}
+      @page{size:A5 portrait;margin:10mm}
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Kasir Sederhana</h1>
+    <div class="header-actions">
+      <button id="toggleTheme" class="btn">Mode Gelap/Terang</button>
+      <button id="newTransaction" class="btn btn-outline">Transaksi Baru</button>
+      <button id="loadLast" class="btn btn-outline">Muat Terakhir</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>Tambah Item</h2>
+      <form id="itemForm" class="form-grid">
+        <div class="form-row">
+          <label for="itemName">Nama item</label>
+          <input type="text" id="itemName" placeholder="Contoh: Kopi" required />
+        </div>
+        <div class="form-row">
+          <label for="itemPrice">Harga (Rp)</label>
+          <input type="number" id="itemPrice" placeholder="15000" min="0" step="1" required />
+        </div>
+        <div class="form-row">
+          <label for="itemQty">Qty</label>
+          <input type="number" id="itemQty" placeholder="1" min="1" step="1" value="1" required />
+        </div>
+        <div class="form-row actions">
+          <button type="submit" class="btn">Tambah</button>
+          <button type="button" id="resetTotal" class="btn btn-danger">Reset Total</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Keranjang</h2>
+      <div class="table-wrapper">
+        <table id="cartTable">
+          <thead>
+            <tr>
+              <th>#</th><th>Nama</th><th>Harga</th><th>Qty</th><th>Subtotal</th><th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="cartBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Pengaturan & Ringkasan</h2>
+      <div class="summary-grid">
+        <div class="summary-row">
+          <label for="discountPercent">Diskon (%)</label>
+          <input type="number" id="discountPercent" min="0" max="100" step="0.5" value="0" />
+        </div>
+        <div class="summary-row">
+          <label for="applyTax">PPN 11%</label>
+          <input type="checkbox" id="applyTax" />
+        </div>
+        <div class="summary-row"><span>Total Kotor:</span><span id="grossTotal">Rp 0</span></div>
+        <div class="summary-row"><span>Diskon:</span><span id="discountAmount">Rp 0</span></div>
+        <div class="summary-row"><span>PPN (11%):</span><span id="taxAmount">Rp 0</span></div>
+        <div class="summary-row total"><span>Total Bayar:</span><span id="netTotal">Rp 0</span></div>
+        <div class="summary-actions">
+          <button id="saveTransaction" class="btn">Simpan Transaksi</button>
+          <button id="printReceipt" class="btn btn-primary">Cetak Struk (PDF)</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel print-area" id="receiptArea">
+      <h2>Struk</h2>
+      <div class="receipt">
+        <div class="receipt-header">
+          <h3>Toko Alfinno</h3>
+          <p id="receiptDate"></p>
+          <p id="receiptId"></p>
+        </div>
+        <div class="receipt-body">
+          <table class="receipt-table">
+            <thead>
+              <tr>
+                <th>Item</th><th>Qty</th><th>Harga</th><th>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="receiptBody"></tbody>
+          </table>
+          <div class="receipt-summary">
+            <div class="line"><span>Total Kotor</span><span id="rGross">Rp 0</span></div>
+            <div class="line"><span>Diskon</span><span id="rDiscount">Rp 0</span></div>
+            <div class="line"><span>PPN 11%</span><span id="rTax">Rp 0</span></div>
+            <div class="line total"><span>Total Bayar</span><span id="rNet">Rp 0</span></div>
+          </div>
+        </div>
+        <div class="receipt-footer">
+          <p>Terima kasih telah berbelanja!</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <small>Kasir Sederhana • PPN 11% • Cetak Struk</small>
+  </footer>
+
+  <script>
+    // State
+    const state = {
+      items: [],
+      discountPercent: 0,
+      applyTax: false,
+      receiptId: null,
+    };
+
+    // Elemen
+    const el = {
+      itemForm: document.getElementById("itemForm"),
+      itemName: document.getElementById("itemName"),
+      itemPrice: document.getElementById("itemPrice"),
+      itemQty: document.getElementById("itemQty"),
+      cartBody: document.getElementById("cartBody"),
+      discountPercent: document.getElementById("discountPercent"),
+      applyTax: document.getElementById("applyTax"),
+      grossTotal: document.getElementById("grossTotal"),
+      discountAmount: document.getElementById("discountAmount"),
+      taxAmount: document.getElementById("taxAmount"),
+      netTotal: document.getElementById("netTotal"),
+      saveBtn: document.getElementById("saveTransaction"),
+      loadLast: document.getElementById("loadLast"),
+      newTransaction: document.getElementById("newTransaction"),
+      toggleTheme: document.getElementById("toggleTheme"),
+      printReceipt: document.getElementById("printReceipt"),
+      resetTotal: document.getElementById("resetTotal"),
+      // Struk
+      receiptDate: document.getElementById("receiptDate"),
+      receiptId: document.getElementById("receiptId"),
+      receiptBody: document.getElementById("receiptBody"),
+      rGross: document.getElementById("rGross"),
+      rDiscount: document.getElementById("rDiscount"),
+      rTax: document.getElementById("rTax"),
+      rNet: document.getElementById("rNet"),
+    };
+
+    // Helper
+    function formatIDR(n){ return "Rp " + Number(n||0).toLocaleString("id-ID"); }
+    function escapeHtml(str){
+      return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+    }
+    function makeId(){
+      const d = new Date();
+      const ymd = [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"), String(d.getDate()).padStart(2,"0")].join("");
+      const hms = [String(d.getHours()).padStart(2,"0"), String(d.getMinutes()).padStart(2,"0"), String(d.getSeconds()).padStart(2,"0")].join("");
+      const rand = Math.random().toString(36).slice(2,6).toUpperCase();
+      return `TRX-${ymd}-${hms}-${rand}`;
+    }
+
+    // Tema
+    (function initTheme(){
+      const saved = localStorage.getItem("kasir_theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    })();
+    el.toggleTheme.addEventListener("click", ()=>{
+      const isDark = document.documentElement.getAttribute("data-theme")==="dark";
+      const next = isDark ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("kasir_theme", next);
+    });
+
+    // Form tambah item
+    el.itemForm.addEventListener("submit",(e)=>{
+      e.preventDefault();
+      const name = el.itemName.value.trim();
+      const price = Number(el.itemPrice.value);
+      const qty = Number(el.itemQty.value);
+      if(!name || price<=0 || qty<=0) return;
+
+      state.items.push({ id: makeId(), name, price, qty });
+      el.itemForm.reset();
+      el.itemQty.value = 1;
+      render(); autosave();
+    });
+
+    // Event hapus (delegasi)
+    el.cartBody.addEventListener("click",(e)=>{
+      const btn = e.target.closest("button[data-id]");
+      if(!btn) return;
+      const id = btn.getAttribute("data-id");
+      state.items = state.items.filter(x=>x.id!==id);
+      render(); autosave();
+    });
+
+    // Reset total
+    el.resetTotal.addEventListener("click", ()=>{
+      state.items = [];
+      state.discountPercent = 0;
+      state.applyTax = false;
+      el.discountPercent.value = 0;
+      el.applyTax.checked = false;
+      state.receiptId = null;
+      render(); autosave();
+    });
+
+    // Diskon & Pajak
+    el.discountPercent.addEventListener("input", ()=>{
+      state.discountPercent = Number(el.discountPercent.value||0);
+      render(); autosave();
+    });
+    el.applyTax.addEventListener("change", ()=>{
+      state.applyTax = el.applyTax.checked;
+      render(); autosave();
+    });
+
+    // Simpan / Muat / Baru
+    el.saveBtn.addEventListener("click", ()=>{
+      saveTransaction();
+      alert("Transaksi disimpan ke perangkat (localStorage).");
+    });
+    el.loadLast.addEventListener("click", ()=>{
+      const raw = localStorage.getItem("kasir_last");
+      if(!raw){ alert("Belum ada transaksi tersimpan."); return; }
+      const data = JSON.parse(raw);
+      state.items = data.items||[];
+      state.discountPercent = data.discountPercent||0;
+      state.applyTax = !!data.applyTax;
+      state.receiptId = data.receiptId||null;
+      el.discountPercent.value = state.discountPercent;
+      el.applyTax.checked = state.applyTax;
+      render();
+    });
+    el.newTransaction.addEventListener("click", ()=>{
+      saveTransaction(); // simpan yang sekarang dulu
+      state.items = [];
+      state.discountPercent = 0;
+      state.applyTax = false;
+      state.receiptId = null;
+      el.discountPercent.value = 0;
+      el.applyTax.checked = false;
+      render();
+    });
+
+    // Print struk
+    el.printReceipt.addEventListener("click", ()=>{
+      renderReceipt();
+      window.print();
+    });
+
+    // Autosave setiap perubahan
+    function autosave(){ saveTransaction(); }
+
+    function saveTransaction(){
+      const payload = {
+        items: state.items,
+        discountPercent: state.discountPercent,
+        applyTax: state.applyTax,
+        receiptId: state.receiptId || makeId(),
+        savedAt: new Date().toISOString(),
+      };
+      state.receiptId = payload.receiptId;
+      localStorage.setItem("kasir_last", JSON.stringify(payload));
+    }
+
+    // Render UI
+    function render(){
+      // Tabel keranjang
+      el.cartBody.innerHTML = "";
+      state.items.forEach((item, idx)=>{
+        const tr = document.createElement("tr");
+        const subtotal = item.price * item.qty;
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${formatIDR(item.price)}</td>
+          <td>${item.qty}</td>
+          <td>${formatIDR(subtotal)}</td>
+          <td><button class="btn btn-danger btn-sm" data-id="${item.id}">Hapus</button></td>
+        `;
+        el.cartBody.appendChild(tr);
+      });
+
+      // Hitung
+      const gross = state.items.reduce((s,it)=>s+it.price*it.qty,0);
+      const discount = Math.min(100, Math.max(0, state.discountPercent));
+      const discAmt = Math.round(gross * discount / 100);
+      const base = gross - discAmt;
+      const tax = state.applyTax ? Math.round(base * 0.11) : 0;
+      const net = base + tax;
+
+      // Tampil ringkasan
+      el.grossTotal.textContent = formatIDR(gross);
+      el.discountAmount.textContent = formatIDR(discAmt);
+      el.taxAmount.textContent = formatIDR(tax);
+      el.netTotal.textContent = formatIDR(net);
+
+      // Struk
+      renderReceipt();
+    }
+
+    function renderReceipt(){
+      const d = new Date();
+      el.receiptDate.textContent = d.toLocaleString("id-ID", { dateStyle:"medium", timeStyle:"short" });
+      const id = state.receiptId || makeId();
+      el.receiptId.textContent = "ID: " + id;
+
+      el.receiptBody.innerHTML = "";
+      state.items.forEach((it)=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(it.name)}</td>
+          <td>${it.qty}</td>
+          <td>${formatIDR(it.price)}</td>
+          <td>${formatIDR(it.price*it.qty)}</td>
+        `;
+        el.receiptBody.appendChild(tr);
+      });
+
+      const gross = state.items.reduce((s,it)=>s+it.price*it.qty,0);
+      const discAmt = Math.round(gross * (state.discountPercent||0) / 100);
+      const base = gross - discAmt;
+      const tax = state.applyTax ? Math.round(base * 0.11) : 0;
+      const net = base + tax;
+
+      el.rGross.textContent = formatIDR(gross);
+      el.rDiscount.textContent = formatIDR(discAmt);
+      el.rTax.textContent = formatIDR(tax);
+      el.rNet.textContent = formatIDR(net);
+    }
+
+    // Render awal
+    render();
+  </script>
+</body>
+</html>rice:Number(el)
